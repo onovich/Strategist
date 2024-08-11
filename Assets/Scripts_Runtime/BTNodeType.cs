@@ -11,6 +11,7 @@ namespace MortiseFrame.Strategist {
         Selector,
         ParallelAnd,
         ParallelOr,
+        Action,
 
     }
 

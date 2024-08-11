@@ -7,9 +7,9 @@ namespace MortiseFrame.Strategist {
     public enum BTNodeStatus {
 
         None,
-        Success,
-        Failure,
+        NotEntered,
         Running,
+        Done,
 
     }
 

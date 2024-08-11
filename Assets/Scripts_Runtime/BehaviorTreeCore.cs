@@ -12,12 +12,14 @@ namespace MortiseFrame.Strategist {
             this.root = root;
         }
 
-        public void Execute() {
-            root.Execute();
-        }
-
-        public void Clear() {
-            root.Clear();
+        public void Tick() {
+            if (root == null) {
+                return;
+            }
+            var status = root.Execute();
+            if (status == BTNodeStatus.Done) {
+                root.Reset();
+            }
         }
 
     }
