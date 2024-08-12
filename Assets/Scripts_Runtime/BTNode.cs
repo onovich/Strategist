@@ -7,17 +7,18 @@ namespace MortiseFrame.Strategist {
 
     public class BTNode {
 
-        public BTNodeType nodeType;
-        public BTNodeStatus status;
-        public List<BTNode> children;
-        BTNode activeChild;
-        public Func<BTNodeStatus> action_enter;
-        public Func<BTNodeStatus> action_tick;
+        BTNodeType nodeType;
 
-        public Func<bool> condition;
+        BTNodeStatus status;
+        public void SetStatus(BTNodeStatus value) => status = value;
+
+        List<BTNode> children;
+        Func<BTNodeStatus> action;
+        BTNode activeChild;
+        Func<bool> condition;
 
         public BTNode(Func<BTNodeStatus> action, Func<bool> condition) {
-            this.action_enter = action;
+            this.action = action;
             this.condition = condition;
             this.children = new List<BTNode>();
         }
@@ -36,11 +37,10 @@ namespace MortiseFrame.Strategist {
             children.Add(child);
         }
 
-        public void SetAction(Func<BTNodeStatus> action_enter, Func<BTNodeStatus> action_tick, Func<bool> condition) {
+        public void SetAction(Func<BTNodeStatus> action, Func<bool> condition) {
             this.nodeType = BTNodeType.Action;
             this.condition = condition;
-            this.action_enter = action_enter;
-            this.action_tick = action_tick;
+            this.action = action;
             this.status = BTNodeStatus.NotEntered;
             this.children = null;
         }
@@ -55,149 +55,135 @@ namespace MortiseFrame.Strategist {
             this.children = new List<BTNode>();
         }
 
-        public BTNodeStatus Execute() {
+        public void Execute() {
             switch (nodeType) {
                 case BTNodeType.Sequence:
-                    return ExecuteSequence();
+                    ExecuteSequence();
+                    break;
                 case BTNodeType.Selector:
-                    return ExecuteSelector();
+                    ExecuteSelector();
+                    break;
                 case BTNodeType.ParallelAnd:
-                    return ExecuteParallelAnd();
+                    ExecuteParallelAnd();
+                    break;
                 case BTNodeType.ParallelOr:
-                    return ExecuteParallelOr();
+                    ExecuteParallelOr();
+                    break;
                 case BTNodeType.Action:
-                    return ExecuteAction();
+                    ExecuteAction();
+                    break;
             }
-            return status;
         }
 
         BTNodeStatus ExecuteAction() {
-            if (status == BTNodeStatus.NotEntered) {
-                if (!condition.Invoke()) {
-                    status = BTNodeStatus.Done;
-                } else {
-                    status = Action_Enter();
-                }
+            if (!PreCondition()) {
+                status = BTNodeStatus.Done;
             } else {
-                if (status == BTNodeStatus.Running) {
-                    status = Action_Tick();
-                }
+                status = Action_Tick();
             }
             return status;
-        }
-
-        BTNodeStatus Action_Enter() {
-            return action_enter.Invoke();
         }
 
         BTNodeStatus Action_Tick() {
-            return action_tick.Invoke();
+            return action.Invoke();
         }
 
-        BTNodeStatus ExecuteSequence() {
-            if (status == BTNodeStatus.NotEntered) {
-                if (!condition.Invoke()) {
-                    return BTNodeStatus.Done;
-                } else {
-                    status = BTNodeStatus.Running;
-                }
-            } else {
-                if (status == BTNodeStatus.Running) {
-                    var doneCount = 0;
-                    foreach (var child in children) {
-                        if (child.status != BTNodeStatus.Done) {
-                            var _ = child.Execute();
-                            break;
-                        } else {
-                            doneCount++;
-                        }
-                    }
-                    if (doneCount == children.Count) {
-                        status = BTNodeStatus.Done;
-                    }
-                }
-            }
-            return status;
+        public bool PreCondition() {
+            return condition.Invoke();
         }
 
-        BTNodeStatus ExecuteSelector() {
-            if (status == BTNodeStatus.NotEntered) {
-                if (!condition.Invoke()) {
-                    return BTNodeStatus.Done;
-                } else {
-                    status = BTNodeStatus.Running;
+        void ExecuteSequence() {
+            // 遍历子节点
+            var doneCount = 0;
+            foreach (var child in children) {
+                // 1. 如果任意节点不可执行, 则当前节点状态置为Done, 并阻断遍历
+                if (!child.PreCondition()) {
+                    status = BTNodeStatus.Done;
+                    return;
                 }
-            } else {
-                if (status == BTNodeStatus.Running) {
-                    if (activeChild != null) {
-                        var _ = activeChild.Execute();
-                        if (activeChild.status == BTNodeStatus.Done) {
-                            status = BTNodeStatus.Done;
-                            activeChild = null;
-                        }
-                    } else {
-                        foreach (var child in children) {
-                            var _ = child.Execute();
-                            if (child.status == BTNodeStatus.Done) {
-                                status = BTNodeStatus.Done;
-                                break;
-                            } else if (child.status == BTNodeStatus.Running) {
-                                activeChild = child;
-                                break;
-                            }
-                        }
-                    }
+                // 2. 如果当前子节点状态为Running, 则执行当前子节点
+                if (child.status == BTNodeStatus.Running) {
+                    child.Execute();
+                    return;
+                }
+                // 3. 如果当前子节点状态为Done, 则计数器+1
+                if (child.status == BTNodeStatus.Done) {
+                    doneCount++;
+                }
+                // 4. 如果计数器等于子节点数量, 则当前节点状态置为Done, 并阻断遍历
+                if (doneCount == children.Count) {
+                    status = BTNodeStatus.Done;
+                    return;
                 }
             }
-            return status;
         }
 
-        BTNodeStatus ExecuteParallelAnd() {
-            if (status == BTNodeStatus.NotEntered) {
-                if (!condition.Invoke()) {
-                    return BTNodeStatus.Done;
-                } else {
-                    status = BTNodeStatus.Running;
+        void ExecuteSelector() {
+            // 当前活跃节点不为空时, 执行当前活跃节点
+            if (activeChild != null) {
+                if (activeChild.status == BTNodeStatus.Running) {
+                    activeChild.Execute();
+                    return;
                 }
-            } else {
-                if (status == BTNodeStatus.Running) {
-                    var doneCount = 0;
-                    foreach (var child in children) {
-                        var _ = child.Execute();
-                        if (child.status == BTNodeStatus.Done) {
-                            doneCount++;
-                        }
-                    }
-                    if (doneCount == children.Count) {
-                        status = BTNodeStatus.Done;
-                    }
+                if (activeChild.status == BTNodeStatus.Done) {
+                    status = BTNodeStatus.Done;
+                    activeChild = null;
+                    return;
                 }
             }
-            return status;
+            // 当前活跃节点为空时, 遍历子节点
+            foreach (var child in children) {
+                // 1. 如果当前子节点不可执行, 则继续遍历
+                if (!child.PreCondition()) {
+                    continue;
+                }
+                // 2. 如果当前子节点状态为Running, 则执行当前子节点
+                if (child.status == BTNodeStatus.Running) {
+                    activeChild = child;
+                    activeChild.Execute();
+                    return;
+                }
+                // 3. 如果当前子节点状态为Done, 则当前节点状态置为Done, 并阻断遍历
+                if (child.status == BTNodeStatus.Done) {
+                    status = BTNodeStatus.Done;
+                    return;
+                }
+            }
         }
 
-        BTNodeStatus ExecuteParallelOr() {
-            if (status == BTNodeStatus.NotEntered) {
-                if (!condition.Invoke()) {
-                    return BTNodeStatus.Done;
-                } else {
-                    status = BTNodeStatus.Running;
+        void ExecuteParallelAnd() {
+            // 遍历子节点
+            var doneCount = 0;
+            foreach (var child in children) {
+                // 1. 如果当前子节点状态为Running, 则执行当前子节点
+                if (child.status == BTNodeStatus.Running) {
+                    child.Execute();
                 }
-            } else {
-                if (status == BTNodeStatus.Running) {
-                    var doneCount = 0;
-                    foreach (var child in children) {
-                        var _ = child.Execute();
-                        if (child.status == BTNodeStatus.Done) {
-                            doneCount++;
-                        }
-                    }
-                    if (doneCount > 0) {
-                        status = BTNodeStatus.Done;
-                    }
+                // 2. 如果当前子节点状态为Done, 则计数器+1
+                if (child.status == BTNodeStatus.Done) {
+                    doneCount++;
+                }
+                // 3. 如果计数器等于子节点数量, 则当前节点状态置为Done, 并阻断遍历
+                if (doneCount == children.Count) {
+                    status = BTNodeStatus.Done;
+                    return;
                 }
             }
-            return status;
+        }
+
+        void ExecuteParallelOr() {
+            // 遍历子节点
+            foreach (var child in children) {
+                // 1. 如果当前子节点状态为Running, 则执行当前子节点
+                if (child.status == BTNodeStatus.Running) {
+                    child.Execute();
+                }
+                // 2. 如果当前子节点状态为Done, 则当前节点状态置为Done, 并阻断遍历
+                if (child.status == BTNodeStatus.Done) {
+                    status = BTNodeStatus.Done;
+                    return;
+                }
+            }
         }
 
     }
