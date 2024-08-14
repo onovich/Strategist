@@ -7,8 +7,8 @@ namespace MortiseFrame.Strategist {
 
     public class BehaviorTreeCore {
 
-        public int rootIndex;
-        public SortedList<int, BTNode> nodes;
+        internal SortedList<int, BTNode> nodes;
+        BTNode root;
 
         int indexRecord;
 
@@ -17,15 +17,34 @@ namespace MortiseFrame.Strategist {
             indexRecord = 0;
         }
 
-        public void AddNode(Func<BTNodeStatus> action) {
+        public int CreateContainerNode(Func<bool> condition, BTNodeType nodeType) {
+            var node = new BTNode();
+            node.SetContainer(nodeType, condition);
+            var index = indexRecord++;
             nodes.Add(index, node);
+            return index;
+        }
+
+        public int CreateAction(Func<BTNodeStatus> action, Func<bool> condition) {
+            var node = new BTNode();
+            node.SetAction(action, condition);
+            var index = indexRecord++;
+            nodes.Add(index, node);
+            return index;
+        }
+
+        public void AddChild(int parentIndex, int childIndex) {
+            var parent = nodes[parentIndex];
+            var child = nodes[childIndex];
+            parent.AddChild(child);
         }
 
         public void Tick() {
             if (root == null) {
                 return;
             }
-            var status = root.Execute();
+            root.Execute();
+            var status = root.Status;
             if (status == BTNodeStatus.Done) {
                 root.Reset();
             }

@@ -5,39 +5,37 @@ using UnityEngine;
 
 namespace MortiseFrame.Strategist {
 
-    public class BTNode {
+    internal class BTNode {
 
         BTNodeType nodeType;
 
         BTNodeStatus status;
-        public void SetStatus(BTNodeStatus value) => status = value;
+        internal BTNodeStatus Status => status;
+        internal void SetStatus(BTNodeStatus value) => status = value;
 
         List<BTNode> children;
-        Func<BTNodeStatus> action;
+        public Func<BTNodeStatus> action;
         BTNode activeChild;
-        Func<bool> condition;
+        public Func<bool> condition;
 
-        public BTNode(Func<BTNodeStatus> action, Func<bool> condition) {
-            this.action = action;
-            this.condition = condition;
-            this.children = new List<BTNode>();
+        internal BTNode() {
         }
 
-        public void Reset() {
+        internal void Reset() {
             status = BTNodeStatus.NotEntered;
             foreach (var child in children) {
                 child.Reset();
             }
         }
 
-        public void AddChild(BTNode child) {
+        internal void AddChild(BTNode child) {
             if (nodeType == BTNodeType.Action) {
                 throw new Exception("Add Child Error: Action Node Can't Have Children");
             }
             children.Add(child);
         }
 
-        public void SetAction(Func<BTNodeStatus> action, Func<bool> condition) {
+        internal void SetAction(Func<BTNodeStatus> action, Func<bool> condition) {
             this.nodeType = BTNodeType.Action;
             this.condition = condition;
             this.action = action;
@@ -45,7 +43,7 @@ namespace MortiseFrame.Strategist {
             this.children = null;
         }
 
-        public void SetContainer(BTNodeType nodeType, Func<bool> condition) {
+        internal void SetContainer(BTNodeType nodeType, Func<bool> condition) {
             if (nodeType == BTNodeType.Action) {
                 throw new Exception("Set Container Error: Action Node Can't Be Container");
             }
@@ -55,7 +53,7 @@ namespace MortiseFrame.Strategist {
             this.children = new List<BTNode>();
         }
 
-        public void Execute() {
+        internal void Execute() {
             switch (nodeType) {
                 case BTNodeType.Sequence:
                     ExecuteSequence();
@@ -88,7 +86,7 @@ namespace MortiseFrame.Strategist {
             return action.Invoke();
         }
 
-        public bool PreCondition() {
+        internal bool PreCondition() {
             return condition.Invoke();
         }
 
